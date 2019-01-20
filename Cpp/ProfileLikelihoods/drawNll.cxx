@@ -15,6 +15,7 @@ int main() {
   std::vector< std::string > inputFiles;
   inputFiles.push_back("nll_bern.root");
   inputFiles.push_back("nll_poly.root");
+  inputFiles.push_back("nll_laurent.root");
 
   std::vector< TGraph* > graphs;
 

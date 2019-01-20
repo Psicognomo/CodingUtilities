@@ -33,6 +33,7 @@ void setVerbositySettings();
 void createTgraph(std::unique_ptr< RooWorkspace >&, RooAbsReal&);
 
 bool usePolynomial = false;
+bool useLaurent = false;
 
 int main( int narg,char* argv[] ) {
 
@@ -48,6 +49,7 @@ int main( int narg,char* argv[] ) {
       { "help"           , no_argument       , 0 , 'h'},
       { "inject"         , optional_argument , 0 , 'i'},
       { "poly"           , optional_argument , 0 , 'p'},
+      { "laurent"        , optional_argument , 0 , 'l'},
       { "correct"        , optional_argument , 0 , 'c'},
       { "save"           , no_argument       , 0 , 's'}
     };
@@ -55,7 +57,7 @@ int main( int narg,char* argv[] ) {
     int option_index = 0;
     int c = 0;
     do {
-      c = getopt_long( narg, argv, "i:cshp", long_options, &option_index);
+      c = getopt_long( narg, argv, "i:lcshp", long_options, &option_index);
       switch (c) {
       case 'h':
 	return Usage();
@@ -66,6 +68,12 @@ int main( int narg,char* argv[] ) {
       case 'p':
 	std::cout<<"Setting background model to a polynomial"<<std::endl;
 	usePolynomial = true;
+	useLaurent = false;
+	break;
+      case 'l':
+	std::cout<<"Setting background model to a laurent polynomial"<<std::endl;
+	usePolynomial = false;
+	useLaurent = true;
 	break;
       case 'c':
 	std::cout<<"The correction to the nll will be applied"<<std::endl;
@@ -91,6 +99,7 @@ int main( int narg,char* argv[] ) {
   workspace->factory("mBB[70,200]");
 
   // Define Background Function
+
   if ( usePolynomial ) {
     workspace->factory("a0[-1,-100,100]");
     workspace->factory("a1[0,-100,100]");
@@ -98,10 +107,18 @@ int main( int narg,char* argv[] ) {
     //    workspace->factory("EXPR::background('@1+@0*@2+@0*@0*@3',mBB,a0,a1,a2)");
     workspace->factory("a3[0,-100,100]");
     workspace->factory("EXPR::background('@1+@0*@2+@0*@0*@3+@0*@0*@0*@4',mBB,a0,a1,a2,a3)");
+  } else if ( useLaurent ) {
+    workspace->factory("a0[0,-150,150]");
+    workspace->factory("a1[5,-150,150]");
+    workspace->factory("a2[-150,-250,-50]");
+    workspace->factory("a3[4,-150,150]");
+    workspace->factory("a4[-200,-300,0]");
+    workspace->factory("a5[10,-150,150]");
+    workspace->factory("EXPR::background('@1+@2/pow(@0,1)+@3/pow(@0,2)+@4/pow(@0,3)+@5/pow(@0,4)+@6/pow(@0,5)',mBB,a0,a1,a2,a3,a4,a5)");
   } else {
     workspace->factory("def[70]");
     workspace->factory("trasl[130]");
-
+    
     workspace->factory("a0[11,0,50]");
     workspace->factory("a1[5,0,50]");
     workspace->factory("a2[3,0,50]");
@@ -145,6 +162,7 @@ int main( int narg,char* argv[] ) {
   RooFormulaVar *nll = nullptr;
   if ( not correctNll ) nll = new RooFormulaVar("nll","nll","@0",RooArgList(*tmp_nll));
   else if ( usePolynomial ) nll = new RooFormulaVar("nll","nll","@0 + 1",RooArgList(*tmp_nll));
+  else if ( useLaurent ) nll = new RooFormulaVar("nll","nll","@0 + 3",RooArgList(*tmp_nll));
   else nll = new RooFormulaVar("nll","nll","@0 + 0",RooArgList(*tmp_nll));
 
   // Perform Fit
@@ -190,7 +208,8 @@ int main( int narg,char* argv[] ) {
   if ( save )
     c1.SaveAs( Form("nllPlot_inj_%.1f_%s.pdf",muHinj,usePolynomial?"poly":"bern") );
 
-  createTgraph( workspace,*nll );
+  if ( save )
+    createTgraph( workspace,*nll );
 
   Runner.Run(true);
 
@@ -207,6 +226,7 @@ int Usage() {
   std::cout<<"  "<< "--inject <arg>     (-i) : the mu_H to be injected : default '0'" << std::endl;
   std::cout<<"  "<< "--correct          (-c) : apply the correction to the nll : default 'false'" << std::endl;
   std::cout<<"  "<< "--poly             (-p) : use polynomial for describing the background : default 'false' "<<std::endl;
+  std::cout<<"  "<< "--laurent          (-l) : use laurent polynomial for describing the background : default 'false' "<<std::endl;
   return EXIT_FAILURE;
 }
 
@@ -221,15 +241,22 @@ void setVerbositySettings() {
 }
 
 void createTgraph(std::unique_ptr< RooWorkspace > &workspace, RooAbsReal &nll) {
-  std::unique_ptr< TFile > outFile( new TFile(usePolynomial?"nll_poly.root":"nll_bern.root","recreate") );
+  std::string function = "bern";
+  if ( usePolynomial ) function = "poly";
+  else if ( useLaurent ) function = "laurent";
+
+  std::cout<<"Saving results into 'nll_"<<function<<".root'"<<std::endl;
+  std::unique_ptr< TFile > outFile( new TFile( Form("nll_%s.root",function.c_str()),"recreate" ) );
 
   int nPoints = 0;
   TGraph gr;
 
   double value = workspace->var("muH")->getMin();
   while( value < workspace->var("muH")->getMax() ) {
-    workspace->var("muH")->setVal( value );
-    gr.SetPoint( nPoints++,value,nll.getVal() );
+    if ( value >= 7 && value <= 12 ) {
+      workspace->var("muH")->setVal( value );
+      gr.SetPoint( nPoints++,value,nll.getVal() );
+    }
     value += 0.01;    
   }
 
