@@ -9,6 +9,7 @@ g++ singleFunctionFit.cxx -o singleFunctionFit `root-config --glibs --cflags` -l
 #include "TCanvas.h"
 #include "TFile.h"
 #include "TH1.h"
+#include "TGraph.h"
 
 #include "RooWorkspace.h"
 #include "RooPlot.h"
@@ -19,7 +20,9 @@ g++ singleFunctionFit.cxx -o singleFunctionFit `root-config --glibs --cflags` -l
 #include "RooAbsPdf.h"
 #include "RooMinimizer.h"
 #include "RooMsgService.h"
-#include "TGraph.h"
+#include "RooFormulaVar.h"
+#include "RooBernstein.h"
+#include "RooFitResult.h"
 
 using namespace RooFit;
 
@@ -38,19 +41,21 @@ int main( int narg,char* argv[] ) {
   /* ===================================================================== */
   double muHinj = 0;
   bool save = false;
+  bool correctNll = false;
 
   if ( narg > 1 ) {
     static struct option long_options[] = {
       { "help"           , no_argument       , 0 , 'h'},
       { "inject"         , optional_argument , 0 , 'i'},
       { "poly"           , optional_argument , 0 , 'p'},
+      { "correct"        , optional_argument , 0 , 'c'},
       { "save"           , no_argument       , 0 , 's'}
     };
 
     int option_index = 0;
     int c = 0;
     do {
-      c = getopt_long( narg, argv, "i:shp", long_options, &option_index);
+      c = getopt_long( narg, argv, "i:cshp", long_options, &option_index);
       switch (c) {
       case 'h':
 	return Usage();
@@ -61,6 +66,10 @@ int main( int narg,char* argv[] ) {
       case 'p':
 	std::cout<<"Setting background model to a polynomial"<<std::endl;
 	usePolynomial = true;
+	break;
+      case 'c':
+	std::cout<<"The correction to the nll will be applied"<<std::endl;
+	correctNll = true;
 	break;
       case 's':
 	std::cout<<"Setting save option to True. The resuls will be saved."<<std::endl;
@@ -83,18 +92,20 @@ int main( int narg,char* argv[] ) {
 
   // Define Background Function
   if ( usePolynomial ) {
-    workspace->factory("a0[37,-100,100]");
-    workspace->factory("a1[11,-100,100]");
-    workspace->factory("a2[11,-100,100]");
-    workspace->factory("EXPR::background('@1+@0*@2+@0*@3',mBB,a0,a1,a2)");
+    workspace->factory("a0[11,-100,100]");
+    workspace->factory("a1[-1,-100,100]");
+    workspace->factory("a2[0.5,-100,100]");
+    //    workspace->factory("EXPR::background('@1+@0*@2+@0*@0*@3',mBB,a0,a1,a2)");
+    workspace->factory("a3[0,-100,100]");
+    workspace->factory("EXPR::background('@1+@0*@2+@0*@0*@3+@0*@0*@0*@4',mBB,a0,a1,a2,a3)");
   } else {
     workspace->factory("def[70]");
     workspace->factory("trasl[130]");
 
-    workspace->factory("a0[37,0,500]");
-    workspace->factory("a1[11,0,500]");
-    workspace->factory("a2[7,0,100]");
-    workspace->factory("EXPR::background('@3*pow(1-(@0-@2)/@1,2)+2*@4*pow(1-(@0-@2)/@1,1)+@5*pow((@0-@2)/@1,2)',mBB,a0,a1,a2,def,trasl)");
+    workspace->factory("a0[11,0,50]");
+    workspace->factory("a1[5,0,50]");
+    workspace->factory("a2[3,0,50]");
+    workspace->factory("EXPR::background('@3*pow(1 - (@0-@2)/@1,2) + @4*2*pow((@0-@2)/@1,1)*pow(1 - (@0-@2)/@1,1) + @5*pow((@0-@2)/@1,2)',mBB,def,trasl,a0,a1,a2)");
   } 
 
   // Define Signal Function 
@@ -106,7 +117,8 @@ int main( int narg,char* argv[] ) {
   // Normalization and co.
   workspace->factory("nBKG[70000,0,2000000]");
 
-  workspace->factory("muH[0,-50,100]");
+  //  workspace->factory("muH[0,-20,50]");
+  workspace->factory("muH[0,7,12]");
   workspace->factory("prod::nSGN(muH,300)");
 
   // Complete Model
@@ -130,13 +142,18 @@ int main( int narg,char* argv[] ) {
   // ************************** //
 
   // Create nll
-  RooAbsReal *nll = workspace->pdf("model")->createNLL(dataHisto,Extended(true));
+  RooAbsReal *tmp_nll = workspace->pdf("model")->createNLL(dataHisto,Extended(true),Offset(true),Optimize(true));
+  RooFormulaVar *nll = nullptr;
+  if ( not correctNll ) nll = new RooFormulaVar("nll","nll","@0",RooArgList(*tmp_nll));
+  else if ( usePolynomial ) nll = new RooFormulaVar("nll","nll","@0 + 4",RooArgList(*tmp_nll));
+  else nll = new RooFormulaVar("nll","nll","@0 + 3",RooArgList(*tmp_nll));
+
   // Perform Fit
   RooMinimizer minuit(*nll);
   minuit.setMinimizerType("Minuit2");
   minuit.migrad();
-  minuit.hesse();
-
+  //  minuit.hesse();
+  
   std::cout<<std::endl<<"==========================================================================================="<<std::endl<<std::endl;
 
   // Plot Fit Result
@@ -189,6 +206,7 @@ int Usage() {
   std::cout<<"  "<< "--help             (-h) : print instructions" << std::endl;
   std::cout<<"  "<< "--save             (-s) : draw the results data : default 'false'" << std::endl;
   std::cout<<"  "<< "--inject <arg>     (-i) : the mu_H to be injected : default '0'" << std::endl;
+  std::cout<<"  "<< "--correct          (-c) : apply the correction to the nll : default 'false'" << std::endl;
   std::cout<<"  "<< "--poly             (-p) : use polynomial for describing the background : default 'false' "<<std::endl;
   return EXIT_FAILURE;
 }
