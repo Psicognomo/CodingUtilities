@@ -92,8 +92,8 @@ int main( int narg,char* argv[] ) {
 
   // Define Background Function
   if ( usePolynomial ) {
-    workspace->factory("a0[11,-100,100]");
-    workspace->factory("a1[-1,-100,100]");
+    workspace->factory("a0[-1,-100,100]");
+    workspace->factory("a1[0,-100,100]");
     workspace->factory("a2[0.5,-100,100]");
     //    workspace->factory("EXPR::background('@1+@0*@2+@0*@0*@3',mBB,a0,a1,a2)");
     workspace->factory("a3[0,-100,100]");
@@ -117,8 +117,7 @@ int main( int narg,char* argv[] ) {
   // Normalization and co.
   workspace->factory("nBKG[70000,0,2000000]");
 
-  //  workspace->factory("muH[0,-20,50]");
-  workspace->factory("muH[0,7,12]");
+  workspace->factory("muH[0,-5,20]");
   workspace->factory("prod::nSGN(muH,300)");
 
   // Complete Model
@@ -145,8 +144,8 @@ int main( int narg,char* argv[] ) {
   RooAbsReal *tmp_nll = workspace->pdf("model")->createNLL(dataHisto,Extended(true),Offset(true),Optimize(true));
   RooFormulaVar *nll = nullptr;
   if ( not correctNll ) nll = new RooFormulaVar("nll","nll","@0",RooArgList(*tmp_nll));
-  else if ( usePolynomial ) nll = new RooFormulaVar("nll","nll","@0 + 4",RooArgList(*tmp_nll));
-  else nll = new RooFormulaVar("nll","nll","@0 + 3",RooArgList(*tmp_nll));
+  else if ( usePolynomial ) nll = new RooFormulaVar("nll","nll","@0 + 1",RooArgList(*tmp_nll));
+  else nll = new RooFormulaVar("nll","nll","@0 + 0",RooArgList(*tmp_nll));
 
   // Perform Fit
   RooMinimizer minuit(*nll);
