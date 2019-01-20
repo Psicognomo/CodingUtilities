@@ -82,22 +82,20 @@ int main( int narg,char* argv[] ) {
   workspace->factory("mBB[70,200]");
 
   // Define Background Function
-  workspace->factory("def[70]");
-  workspace->factory("trasl[130]");
-
-  if ( not usePolynomial ) {
-    workspace->factory("a0[37,0,500]");
-    workspace->factory("a1[11,0,500]");
-    workspace->factory("a2[7,0,100]");
-    workspace->factory("a3[2,0,100]");
-    workspace->factory("EXPR::background('@3*pow(1-(@0-@2)/@1,2)+2*@4*pow(1-(@0-@2)/@1,1)+@5*pow((@0-@2)/@1,2)',mBB,a0,a1,a2,def,trasl)");
-    //  workspace->factory("EXPR::background('@1*pow(1-(@0-@6)/@5,3)+@2*3*(@0-@6)/@5*pow(1-(@0-@6)/@5,2)+3*@3*pow((@0-@6)/@5,2)*pow(1-(@0-@6)/@5,1)+@4*pow((@0-@6)/@5,3)',mBB,a0,a1,a2,a3,def,trasl)");
-  } else {
+  if ( usePolynomial ) {
     workspace->factory("a0[37,-100,100]");
     workspace->factory("a1[11,-100,100]");
     workspace->factory("a2[11,-100,100]");
     workspace->factory("EXPR::background('@1+@0*@2+@0*@3',mBB,a0,a1,a2)");
-  }
+  } else {
+    workspace->factory("def[70]");
+    workspace->factory("trasl[130]");
+
+    workspace->factory("a0[37,0,500]");
+    workspace->factory("a1[11,0,500]");
+    workspace->factory("a2[7,0,100]");
+    workspace->factory("EXPR::background('@3*pow(1-(@0-@2)/@1,2)+2*@4*pow(1-(@0-@2)/@1,1)+@5*pow((@0-@2)/@1,2)',mBB,a0,a1,a2,def,trasl)");
+  } 
 
   // Define Signal Function 
   workspace->factory("mean[125]");
@@ -108,8 +106,8 @@ int main( int narg,char* argv[] ) {
   // Normalization and co.
   workspace->factory("nBKG[70000,0,2000000]");
 
-  workspace->factory("muH[1,-100,100]");
-  workspace->factory("prod::nSGN(muH,100)");
+  workspace->factory("muH[0,-50,100]");
+  workspace->factory("prod::nSGN(muH,300)");
 
   // Complete Model
   workspace->factory("SUM::model(nBKG*background,nSGN*signal)");
@@ -155,10 +153,11 @@ int main( int narg,char* argv[] ) {
     c0.SaveAs( Form("mBBfit_inj_%.1f_%s.pdf",muHinj,usePolynomial?"poly":"bern") );
 
   // Plot nll as a function of muH
+  std::cout<<"Best Fit: "<< workspace->var("muH")->getValV() <<" +/- "<< workspace->var("muH")->getError() << std::endl;
   double minimumValue = workspace->var("muH")->getValV();
-  workspace->var("muH")->setVal(-100);
+  workspace->var("muH")->setVal( workspace->var("muH")->getMin() );
   double lowerBound = nll->getVal();
-  workspace->var("muH")->setVal(100);
+  workspace->var("muH")->setVal( workspace->var("muH")->getMax() );
   double upperBound = nll->getVal();
   workspace->var("muH")->setVal( minimumValue );
 
@@ -210,8 +209,8 @@ void createTgraph(std::unique_ptr< RooWorkspace > &workspace, RooAbsReal &nll) {
   int nPoints = 0;
   TGraph gr;
 
-  double value = -100;
-  while( value < 100 ) {
+  double value = workspace->var("muH")->getMin();
+  while( value < workspace->var("muH")->getMax() ) {
     workspace->var("muH")->setVal( value );
     gr.SetPoint( nPoints++,value,nll.getVal() );
     value += 0.01;    

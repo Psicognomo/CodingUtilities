@@ -41,6 +41,7 @@ int main() {
 
   c0.Draw();
   c0.Update();
+  c0.SaveAs("nllProfiles.pdf");
 
   Runner.Run(true);
 }
